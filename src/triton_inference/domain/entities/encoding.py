@@ -85,7 +85,7 @@ class Vocabulary(BaseModel):
         """Map the raw user id to its index; `UnknownTokenError` if unknown."""
         index = self.user_vocab.get(user.user_id, -1)
         if index == -1:
-            raise UnknownTokenError
+            raise UnknownTokenError("unknown user")
 
         return index
 
@@ -93,7 +93,7 @@ class Vocabulary(BaseModel):
         """Map the raw movie id to its index; `UnknownTokenError` if unknown."""
         index = self.item_vocab.get(movie.movie_id, -1)
         if index == -1:
-            raise UnknownTokenError
+            raise UnknownTokenError("unknown movie")
 
         return index
 
@@ -110,7 +110,7 @@ class Vocabulary(BaseModel):
         for genre in movie.genres:
             index = self.genre_vocab.get(genre, -1)
             if index == -1:
-                raise UnknownTokenError
+                raise UnknownTokenError("unknown genre")
             res.append(index)
 
         return res + (self.max_genres - len(res)) * [self.genre_pad_index]
