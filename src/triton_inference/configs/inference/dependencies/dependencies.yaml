@@ -1,0 +1,2 @@
+triton_url: ${oc.env:TRITON_URL,localhost:8001}
+vocabulary_path: ${oc.env:VOCABULARY_PATH,vocabulary.json}

@@ -1,0 +1,7 @@
+defaults:
+  - dependencies: dependencies
+  - adapters: recommender
+  - _self_
+
+app:
+  title: triton-inference

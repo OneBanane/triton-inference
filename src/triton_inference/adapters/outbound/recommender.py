@@ -9,8 +9,11 @@ FP32 `output` [N] (`max_batch_size: 0`, so no implicit batch dimension).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import numpy as np
 import tritonclient.grpc as grpcclient
+from tritonclient.utils import triton_to_np_dtype
 
 from triton_inference.domain.entities import (
     InferenceBatch,
@@ -18,8 +21,6 @@ from triton_inference.domain.entities import (
     RecommendationRequest,
     Vocabulary,
 )
-
-DEFAULT_MODEL_NAME = "recommender_onnx"
 
 
 class TritonRecommender:
@@ -35,11 +36,15 @@ class TritonRecommender:
         self,
         client: grpcclient.InferenceServerClient,
         vocabulary: Vocabulary,
-        model_name: str = DEFAULT_MODEL_NAME,
+        model_name: str,
+        inputs: Mapping[str, Mapping[str, str]],
+        output_name: str,
     ) -> None:
         self._client = client
         self._vocabulary = vocabulary
         self._model_name = model_name
+        self._inputs = inputs
+        self._output_name = output_name
 
     def recommend(self, request: RecommendationRequest) -> Recommendation:
         batch = InferenceBatch.from_request(request, self._vocabulary)
@@ -52,23 +57,21 @@ class TritonRecommender:
         )
 
     def _infer(self, batch: InferenceBatch) -> list[float]:
-        user_id = np.asarray(batch.user_ids, dtype=np.int64)
-        movie_id = np.asarray(batch.movie_ids, dtype=np.int64)
-        genres = np.asarray(batch.genres, dtype=np.int64)
+        inputs = []
+        for field, tensor in self._inputs.items():
+            data = np.asarray(
+                getattr(batch, field), dtype=triton_to_np_dtype(tensor["datatype"])
+            )
+            infer_input = grpcclient.InferInput(
+                tensor["name"], data.shape, tensor["datatype"]
+            )
+            infer_input.set_data_from_numpy(data)
+            inputs.append(infer_input)
 
-        inputs = [
-            grpcclient.InferInput("user_id", user_id.shape, "INT64"),
-            grpcclient.InferInput("movie_id", movie_id.shape, "INT64"),
-            grpcclient.InferInput("genres", genres.shape, "INT64"),
-        ]
-        inputs[0].set_data_from_numpy(user_id)
-        inputs[1].set_data_from_numpy(movie_id)
-        inputs[2].set_data_from_numpy(genres)
-
-        output = grpcclient.InferRequestedOutput("output")
+        output = grpcclient.InferRequestedOutput(self._output_name)
 
         response = self._client.infer(
             model_name=self._model_name, inputs=inputs, outputs=[output]
         )
 
-        return response.as_numpy("output").tolist()
+        return response.as_numpy(self._output_name).tolist()
