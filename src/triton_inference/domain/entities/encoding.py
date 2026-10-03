@@ -2,10 +2,11 @@
 
 The served ONNX model (see `triton_models/models/recommender_onnx/config.pbtxt`)
 takes three INT64 inputs per call, one row per (user, movie) pair:
-    user_id  [N]            contiguous user index
-    movie_id [N]            contiguous item index
-    genres   [N, max_genres] genre indices, right-padded with `num_genres`
-and returns FP32 `output` [N] with one score per pair.
+    user_id  [B, 1]          contiguous user index
+    movie_id [B, 1]          contiguous item index
+    genres   [B, max_genres] genre indices, right-padded with `num_genres`
+and returns FP32 `output` [B, 1] with one score per pair. The adapter shapes
+the ID columns and splits the encoded candidates into batches of at most 32.
 """
 
 from __future__ import annotations

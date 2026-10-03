@@ -29,7 +29,7 @@ def vocabulary_path(tmp_path):
 def triton_client_factory(monkeypatch):
     factory = MagicMock()
     factory.return_value.infer.return_value.as_numpy.return_value = np.array(
-        [0.1, 0.9], dtype=np.float32
+        [[0.1], [0.9]], dtype=np.float32
     )
     monkeypatch.setattr(dependencies.grpcclient, "InferenceServerClient", factory)
     return factory
@@ -107,8 +107,8 @@ def test_requests_use_configured_triton_contract_and_reuse_client(
     ]
     assert [tensor.datatype() for tensor in arguments["inputs"]] == ["INT32"] * 3
     assert [list(tensor.shape()) for tensor in arguments["inputs"]] == [
-        [2],
-        [2],
+        [2, 1],
+        [2, 1],
         [2, 2],
     ]
     assert arguments["outputs"][0].name() == "scores"
@@ -130,7 +130,7 @@ def test_applications_have_independent_configs_and_clients(
         "candidates": [{"movie_id": 200, "title": "Drama", "genres": ["Drama"]}],
     }
     triton_client_factory.return_value.infer.return_value.as_numpy.return_value = (
-        np.array([0.5], dtype=np.float32)
+        np.array([[0.5]], dtype=np.float32)
     )
 
     with TestClient(first_app) as client:
@@ -149,3 +149,59 @@ def test_applications_have_independent_configs_and_clients(
         triton_client_factory.return_value.infer.call_args.kwargs["model_name"]
         == "second_model"
     )
+
+
+@pytest.mark.parametrize("top_k", [None, 3])
+def test_one_api_request_combines_triton_batches_before_ranking(
+    tmp_path, triton_client_factory, top_k
+):
+    movie_ids = list(reversed(range(100, 165)))
+    vocabulary = Vocabulary(
+        user_vocab={10: 0},
+        item_vocab={movie_id: i for i, movie_id in enumerate(movie_ids)},
+        genre_vocab={"Drama": 0},
+        max_genres=2,
+    )
+    vocabulary_path = tmp_path / "vocabulary.json"
+    vocabulary_path.write_text(vocabulary.model_dump_json())
+    app = create_app(load_config([f"dependencies.vocabulary_path={vocabulary_path}"]))
+    expected_scores = np.roll(np.arange(65, dtype=np.float32), 1)
+    triton_responses = []
+    for start, stop in [(0, 32), (32, 64), (64, 65)]:
+        triton_response = MagicMock()
+        triton_response.as_numpy.return_value = expected_scores[start:stop].reshape(
+            -1, 1
+        )
+        triton_responses.append(triton_response)
+    triton_client = triton_client_factory.return_value
+    triton_client.infer.side_effect = triton_responses
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/recommendations",
+            json={
+                "user_id": 10,
+                "candidates": [
+                    {"movie_id": movie_id, "title": str(movie_id), "genres": ["Drama"]}
+                    for movie_id in movie_ids
+                ],
+                "top_k": top_k,
+            },
+        )
+
+    assert response.status_code == 200
+    triton_client_factory.assert_called_once()
+    assert triton_client.infer.call_count == 3
+    assert [
+        list(call.kwargs["inputs"][0].shape())
+        for call in triton_client.infer.call_args_list
+    ] == [[32, 1], [32, 1], [1, 1]]
+    ranked = sorted(
+        zip(movie_ids, expected_scores.tolist()), key=lambda pair: pair[1], reverse=True
+    )
+    if top_k is not None:
+        ranked = ranked[:top_k]
+    body = response.json()
+    assert body["user_id"] == 10
+    assert [item["movie_id"] for item in body["items"]] == [pair[0] for pair in ranked]
+    assert [item["score"] for item in body["items"]] == [pair[1] for pair in ranked]
