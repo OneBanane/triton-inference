@@ -1,6 +1,15 @@
 # triton-inference
 Inference module for my Nvidia Triton Server project
 
+Start the application locally:
+
+```sh
+make run
+```
+
+The API is available at `http://127.0.0.1:8000`, with interactive documentation
+at `http://127.0.0.1:8000/docs`.
+
 Runtime settings are composed with Hydra from
 `src/triton_inference/configs/inference/config.yaml`. Configs are included in
 the Python package, so loading them does not depend on the working directory.

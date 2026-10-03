@@ -9,6 +9,7 @@ dependencies = [
     "hydra-core>=1.3.7",
     "pydantic>=2.13.5",
     "tritonclient[grpc]>=2.73.0",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]

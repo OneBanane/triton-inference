@@ -1,8 +1,11 @@
-.PHONY: install check format lint clean
+.PHONY: install run check format lint clean
 
 install:
 	uv sync --dev
 	uv run pre-commit install
+
+run:
+	uv run uvicorn triton_inference.main:app --host 127.0.0.1 --port 8000
 
 check:
 	uv run pre-commit run --all-files
