@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from triton_inference.app.dependencies import get_recommender
-from triton_inference.app.main import app
+from triton_inference.main import app
 from triton_inference.domain.entities import Movie, User
 
 

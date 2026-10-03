@@ -1,0 +1,14 @@
+model_name: ${oc.env:TRITON_MODEL_NAME,recommender_onnx}
+
+inputs:
+  user_ids:
+    name: user_id
+    datatype: INT64
+  movie_ids:
+    name: movie_id
+    datatype: INT64
+  genres:
+    name: genres
+    datatype: INT64
+
+output_name: output
